@@ -1,0 +1,114 @@
+---
+title: "MD2024 mini project: Final OD600 plot"
+output: html_notebook
+---
+
+# Setup
+
+```{r}
+library(tidyverse)
+library(ghibli)
+```
+
+
+# Load data
+
+```{r}
+df<-read_csv("OD600.csv")
+
+# make columns into factors
+cols<-c("Isolate","Transfer","Replicate","Salt")
+df[cols]<-lapply(df[cols],factor)
+
+# make column for each isolate + salt condition
+df$Isolate_Salt <- paste(df$Isolate, "_", df$Salt)
+```
+
+
+# Make summarySE function
+- from http://www.cookbook-r.com/Manipulating_data/Summarizing_data/
+```{r}
+summarySE <- function(data=NULL, measurevar, groupvars=NULL, na.rm=FALSE, conf.interval=.95) {
+    library(doBy)
+
+    # New version of length which can handle NA's: if na.rm==T, don't count them
+    length2 <- function (x, na.rm=FALSE) {
+        if (na.rm) sum(!is.na(x))
+        else       length(x)
+    }
+
+    # Collapse the data
+    formula <- as.formula(paste(measurevar, paste(groupvars, collapse=" + "), sep=" ~ "))
+    datac <- summaryBy(formula, data=data, FUN=c(length2,mean,sd), na.rm=na.rm)
+
+    # Rename columns
+    names(datac)[ names(datac) == paste(measurevar, ".mean",    sep="") ] <- measurevar
+    names(datac)[ names(datac) == paste(measurevar, ".sd",      sep="") ] <- "sd"
+    names(datac)[ names(datac) == paste(measurevar, ".length2", sep="") ] <- "N"
+    
+    datac$se <- datac$sd / sqrt(datac$N)  # Calculate standard error of the mean
+    
+    # Confidence interval multiplier for standard error
+    # Calculate t-statistic for confidence interval: 
+    # e.g., if conf.interval is .95, use .975 (above/below), and use df=N-1
+    ciMult <- qt(conf.interval/2 + .5, datac$N-1)
+    datac$ci <- datac$se * ciMult
+    
+    return(datac)
+}
+```
+
+
+# SE
+
+```{r}
+df_SE<-df %>% 
+  summarySE(measurevar="OD600_24h",groupvars=c("Isolate","Salt","Transfer"))
+```
+
+
+
+# Plot transfer 1&2
+
+```{r}
+# colours
+val<-c("steelblue","mediumpurple","orchid")
+
+# Transfer 1
+gg_iso_salt1<-df %>% filter(Transfer=="ONE") %>% 
+  ggplot(aes(x=Salt,y=OD600_24h,colour=Isolate))+
+  geom_boxplot()+
+  geom_point(position=position_dodge(width=0.75),alpha=0.5)+
+  labs(x="Salt %",y="OD600",colour="Isolate",title="a)")+
+  scale_colour_manual(values=val2)+
+  theme_bw()+
+  theme(panel.grid.major=element_blank(), panel.grid.minor=element_blank(),
+        axis.title=element_text(size=16),axis.text=element_text(size=10),
+        strip.text=element_text(size=10),
+        legend.text=element_text(size=10))
+ggsave("iso_salt1.png",width=5,height=4)
+
+# Transfer 2
+gg_iso_salt2<-df %>% filter(Transfer=="TWO") %>% 
+  ggplot(aes(x=Salt,y=OD600_24h,colour=Isolate))+
+  geom_boxplot()+
+  geom_point(position=position_dodge(width=0.75),alpha=0.5)+
+  labs(x="Salt %",y="OD600",colour="Isolate",title="b)")+
+  scale_colour_manual(values=val)+
+  theme_bw()+
+  theme(panel.grid.major=element_blank(), panel.grid.minor=element_blank(),
+        axis.title=element_text(size=16),axis.text=element_text(size=10),
+        strip.text=element_text(size=10),
+        legend.text=element_text(size=10))
+ggsave("iso_salt2.png",width=5,height=4)
+```
+
+
+# Average across all salt treatments
+```{r}
+df %>% 
+  ggplot(aes(x=Salt,y=OD600_24h))+
+  geom_boxplot(aes(colour=Isolate))+
+  facet_wrap(~Transfer)
+```
+
