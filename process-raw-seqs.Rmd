@@ -1,0 +1,103 @@
+---
+title: "MD2024 mini project: Processing raw sequencing files"
+author: "Jessie Wang"
+---
+
+**MD2024 mini project**
+- 3 Trunk River halophile genomes to be processed
+
+
+# 1. FastQC
+
+```{bash}
+# navigate to MD2024/mini_project
+# make fastqc folder with mkdir fastqc
+
+fastqc --kmers 7 --outdir fastqc *halo-#_R1.fastq.gz *halo-#_R2.fastq.gz
+## sub # with 1/2/3
+## could also use *.fastq.gz to process all files at once
+```
+
+
+# 2. Trimmomatic
+
+parameters (general description)
+• ILLUMINACLIP: Trim adaptor and other Illumina sequences off the ends of reads. 
+• SLIDINGWINDOW: Trim reads based on average quality in a window of defined size. 
+• MINLEN: Drop all reads below a defined length. 
+• LEADING/TRAILING: Cut bases at the start/end of reads if below defined quality. 
+• CROP/HEADCROP: Cut a defined number of bases at start/end of reads (regardless of quality). 
+• AVGQUAL: Drop all reads below a defined average quality. 
+
+- PE = input data is paired-end
+- ILLUMINACLIP = trim TruSeq3 adapters off the end of reads (default values)
+  - 2 (maximum seed mismatch) 
+  - 30 (palindrome clip threshold) 
+  - 10 (simple clip threshold) 
+- SLIDINGWINDOW = trim reads when avg quality across 4 bases < Phred20  
+  
+```{bash}
+java -jar trimmomatic-0.39.jar PE *halo-#_R1.fastq.gz *halo-#_R2.fastq.gz trimmed_paired_halo-#_R1.fastq.gz trimmed_unpaired_halo-#_R1.fastq.gz trimmed_paired_halo-#_R2.fastq.gz trimmed_unpaired_halo-#_R2.fastq.gz ILLUMINACLIP:TruSeq3-PE.fa:2:30:10 LEADING:10 TRAILING:10 SLIDINGWINDOW:4:20 MINLEN:50
+## sub # with 1/2/3
+
+# run fastqc on trimmed* in fastqc_trim folder
+```
+
+
+# 3. SPAdes: error correction + assembly
+
+
+```{bash}
+conda activate anvio-8
+
+# run error correction + assembly at same time
+
+# halo 1
+spades.py -1 trimmed_paired_halo-1_R1.fastq.gz -2 trimmed_paired_halo-1_R2.fastq.gz -o halo-1-output
+## sub # with 1/2/3
+
+# error correction only:
+--only-error-correction
+
+# assembly only:
+--only-assembler
+```
+
+
+4. Quast: assembly statistics
+
+```{bash}
+# general format
+quast -o output_folder -l "label" path_to_file
+
+
+quast.py -o halo-1-quast -l "TR_01" ~/MD2024/mini_project/halo-1-output/scaffolds.fasta
+## sub # for 1/2/3
+```
+
+
+5. Assign taxonomy using anvio
+
+```{bash}
+# convert scaffolds.fasta to .db file
+anvi-gen-contigs-database -f halo-1-output/scaffolds.fasta -o halo-1-scaffolds.db
+
+# combat error message lol
+anvi-run-hmms -c halo-1-scaffolds.db
+
+# assign taxonomy
+anvi-run-scg-taxonomy -c halo-1-scaffolds.db
+anvi-estimate-scg-taxonomy -c halo-1-scaffolds.db
+```
+
+
+6. Prokka
+
+- annotations
+- later run using DRAM
+
+```{bash}
+prokka halo-1-output/scaffolds.fasta -outdir prokka/halo-1-prokka
+## sub # for 1/2/3
+```
+
